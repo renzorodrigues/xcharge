@@ -1,0 +1,44 @@
+#  Template .NET Core build
+
+#  This template allows you to validate your .NET Core package.
+#  The workflow allows running tests and code linting on the default branch.
+
+# To run your pipeline on a Windows machine, create a self-hosted Windows runner.
+# For instructions on setting up a Windows runner, see https://support.atlassian.com/bitbucket-cloud/docs/set-up-runners-for-windows/
+
+image: mcr.microsoft.com/dotnet/sdk:8.0
+
+pipelines:
+  default:
+    - parallel:
+        - step:
+            name: Build and Test
+            caches:
+              - dotnetcore
+            script:
+              - REPORTS_PATH=./test-reports/build_${BITBUCKET_BUILD_NUMBER}
+              - dotnet restore
+              - dotnet build --no-restore --configuration Release
+              - dotnet test --no-build --configuration Release --test-adapter-path:.
+        - step:
+            name: CSharpier
+            caches:
+              - dotnetcore
+            script:
+              - export SOLUTION_NAME=xcharge
+              - dotnet tool restore
+              - dotnet csharpier --check .
+            # artifacts:
+            #   - linter-reports/**
+        - step:
+            trigger: manual
+            name: Mutation Test
+            script:
+              # - dotnet new tool-manifest --force
+              - dotnet tool install dotnet-stryker
+              - dotnet tool restore
+              - dotnet stryker
+              - pipe: atlassian/bitbucket-upload-file:0.7.1
+                variables:
+                  BITBUCKET_ACCESS_TOKEN: $BITBUCKET_ACCESS_TOKEN
+                  FILENAME: "**/mutation-report.html"
